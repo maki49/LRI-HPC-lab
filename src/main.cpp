@@ -51,13 +51,16 @@ void test_gemm()
     }
     std::cout << std::endl;
 }
-int main()
+int main(int argc, char* argv[])
 {
     test_gemm();
 
-
-    
-    // CVD cvd;
-    // cvd.read_CVD("../files/Cs.txt", "../files/Vs.txt", "../files/Ds.txt");
+    // try LibRI 
+    int mpi_init_provide;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpi_init_provide);
+    RI_Tensor ri;
+    ri.read_CVD("../files/Cs.txt", "../files/Vs.txt", "../files/Ds.txt");
+    ri.cal_Hexxs_lri_cpu();
+    MPI_Finalize();
     return 0;
 }

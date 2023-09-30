@@ -1,0 +1,6 @@
+[submodule "LibRI"]
+	path = LibRI
+	url = https://github.com/abacusmodeling/LibRI
+[submodule "LibComm"]
+	path = LibComm
+	url = https://github.com/abacusmodeling/LibComm

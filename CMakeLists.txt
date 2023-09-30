@@ -6,6 +6,18 @@ option(ENABLE_CUDA "Enable CUDA" ON)
 
 aux_source_directory(src ALL_SRCS)
 add_executable(${PROJECT_NAME} ${ALL_SRCS})
+include_directories(LibRI/include LibComm/include)
+
+#openmp
+  find_package(OpenMP REQUIRED)
+  target_link_libraries(${ABACUS_BIN_NAME} OpenMP::OpenMP_CXX)
+  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  add_link_options(${OpenMP_CXX_LIBRARIES})
+
+#blas
+find_package(BLAS REQUIRED)
+target_link_libraries(${PROJECT_NAME} ${BLAS_LIBRARIES})
 
 if(ENALE_MPI)
     find_package(MPI REQUIRED)
