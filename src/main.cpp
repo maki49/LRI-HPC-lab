@@ -1,4 +1,4 @@
-#include "cvd.h"
+#include "ri_tensor.h"
 #include "gemm.h"
 #include <fstream>
 
@@ -51,16 +51,43 @@ void test_gemm()
     }
     std::cout << std::endl;
 }
-int main(int argc, char* argv[])
-{
-    test_gemm();
 
-    // try LibRI 
+void test_gemm_stream(int nmat, int m, int n, int k)
+{
+    std::vector<CaseDense<double>> cases(nmat);
+    for(int i = 0; i < nmat; i++)
+    {
+        cases[i].A.assign(m*k, i);
+        cases[i].B.assign(k*n, i);
+        cases[i].C.assign(m*n, 0);
+    }
+    CudaGemm<double>::gemmblas_stream(cases, m, n, k, 1.0, 0.0);
+    CudaGemm<double>::gemmblas_cpu_ref(cases, m, n, k, 1.0, 0.0);
+}
+
+void test_libri_hs_cpu(int argc, char* argv[])
+{
     int mpi_init_provide;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpi_init_provide);
     RI_Tensor ri;
     ri.read_CVD("../files/Cs.txt", "../files/Vs.txt", "../files/Ds.txt");
     ri.cal_Hexxs_lri_cpu();
     MPI_Finalize();
+}
+
+int main(int argc, char* argv[])
+{
+    // test_gemm();
+
+    // test gemm stream
+    // total time elapsed(GPU): 1.54035 ms
+    // total time elapsed(CPU) : 0.160346 ms
+    int nmat = 10000;
+    int m = 13 * 13, n = 65, k = 65;    //CV
+    test_gemm_stream(nmat, m, n, k);
+    
+    // test_libri_hs_cpu(argc, argv);
+
+
     return 0;
 }

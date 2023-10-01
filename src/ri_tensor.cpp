@@ -1,4 +1,4 @@
-#include "cvd.h"
+#include "ri_tensor.h"
 #include <fstream>
 #include <assert.h>
 #include <iostream>
@@ -18,7 +18,7 @@ inline std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<dou
     int tb_read;
     std::vector<unsigned long> dim(ndim);
     ifs >> tmp;
-    while (ifs >> ta_read&& ta_read < na)
+    while (ifs >> ta_read && ta_read < na)
     {
         assert(tmp == "ta=");
         while (ifs >> tmp && tmp == "tb=")
