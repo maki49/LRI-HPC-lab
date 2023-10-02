@@ -16,7 +16,7 @@ inline std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<dou
     std::string tmp;
     int ta_read;
     int tb_read;
-    std::vector<unsigned long> dim(ndim);
+    std::vector<int> dim(ndim);
     ifs >> tmp;
     while (ifs >> ta_read && ta_read < na)
     {
@@ -27,7 +27,7 @@ inline std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<dou
             int i, j, k;
             ifs >> tmp >> i >> j >> k;   // R 
             ifs >> tmp; // "size="
-            unsigned long totdim = 1;
+            int totdim = 1;
             for (int l = 0;l < ndim;++l) {
                 ifs >> dim[l];
                 totdim *= dim[l];

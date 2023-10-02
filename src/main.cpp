@@ -57,12 +57,17 @@ void test_gemm_stream(int nmat, int m, int n, int k)
     std::vector<CaseDense<double>> cases(nmat);
     for(int i = 0; i < nmat; i++)
     {
-        cases[i].A.assign(m*k, i);
-        cases[i].B.assign(k*n, i);
+        cases[i].A.assign(m * k, 1);
+        cases[i].B.assign(k * n, 1);
         cases[i].C.assign(m*n, 0);
     }
-    CudaGemm<double>::gemmblas_stream(cases, m, n, k, 1.0, 0.0);
     CudaGemm<double>::gemmblas_cpu_ref(cases, m, n, k, 1.0, 0.0);
+    CudaGemm<double>::gemmblas_stream(cases, m, n, k, 1.0, 0.0);
+    std::vector<int> nstream_try = { 1 };
+    for (int ns : nstream_try)
+    {
+        CudaGemm<double>::gemmsparse_stream_block_csr(cases, m, n, k, 1.0, 0.0, ns);
+    }
 }
 
 void test_libri_hs_cpu(int argc, char* argv[])
@@ -77,13 +82,16 @@ void test_libri_hs_cpu(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    // test_gemm();
+    test_gemm();
 
     // test gemm stream
     // total time elapsed(GPU): 1.54035 ms
     // total time elapsed(CPU) : 0.160346 ms
-    int nmat = 10000;
-    int m = 13 * 13, n = 65, k = 65;    //CV
+    // int nmat = 1;
+    // int m = 13 * 13, n = 65, k = 65;    //CV
+
+    int nmat = 1;
+    int m = 13 * 13, n = 65, k = 65;
     test_gemm_stream(nmat, m, n, k);
     
     // test_libri_hs_cpu(argc, argv);

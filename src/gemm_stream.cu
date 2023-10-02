@@ -40,10 +40,14 @@ void CudaGemm<double>::gemmblas_stream(std::vector<CaseDense<double>>ABC, int M,
     {
         // auto start_i = std::chrono::system_clock::now();
 
+        // why cudaMallocAsync is slower than cudaMalloc?
+        // cudaMallocAsync((void**)&d_As[i], M * K * sizeof(double), streams[i]);
+        // cudaMallocAsync((void**)&d_Bs[i], K * N * sizeof(double), streams[i]);
+        // cudaMallocAsync((void**)&d_Cs[i], M * N * sizeof(double), streams[i]);
         cudaMalloc((void**)&d_As[i], M * K * sizeof(double));
         cudaMalloc((void**)&d_Bs[i], K * N * sizeof(double));
         cudaMalloc((void**)&d_Cs[i], M * N * sizeof(double));
-        cudaMemcpyAsync(d_As[i], ABC[i].A.data(), M * K * sizeof(double), cudaMemcpyHostToDevice, streams[i]);
+        // cudaMemcpy(d_As[i], ABC[i].A.data(), M * K * sizeof(double), cudaMemcpyHostToDevice);
         cudaMemcpyAsync(d_Bs[i], ABC[i].B.data(), K * N * sizeof(double), cudaMemcpyHostToDevice, streams[i]);
         
         cublasSetStream(handle, streams[i]);
@@ -51,29 +55,27 @@ void CudaGemm<double>::gemmblas_stream(std::vector<CaseDense<double>>ABC, int M,
 
         // print_matrix<<<1, 1, 0, streams[i]>>>(d_Cs[i], M, N, i);
 
+        // cudaMemcpy(ABC[i].C.data(), d_Cs[i], M * N * sizeof(double), cudaMemcpyDeviceToHost);
         cudaMemcpyAsync(ABC[i].C.data(), d_Cs[i], M * N * sizeof(double), cudaMemcpyDeviceToHost, streams[i]);
 
         // auto end_i = std::chrono::system_clock::now();
         // std::chrono::duration<double> duration_i = end_i - start_i;
         // std::cout << "stream:" << i << "time elapsed: " << double(duration_i.count()) << " ms" << std::endl;
-        cudaStreamDestroy(streams[i]);
 
-        // std::cout << "result_" << std::to_string(i) << ".txt" << std::endl;;
-        // std::cout << " C_vector: " << std::endl;
-        // for (int r = 0; r < M; r++)
-        // {
-        //     for (int c = 0;c < N;c++)
-        //     {
-        //         std::cout << ABC[i].C[c * M + r] << " ";
-        //     }
-        //     std::cout << std::endl;
-        // }
-        
+        // cudaFreeAsync(d_As[i], streams[i]);
+        // cudaFreeAsync(d_Bs[i], streams[i]);
+        // cudaFreeAsync(d_Cs[i], streams[i]);
         cudaFree(d_As[i]);
         cudaFree(d_Bs[i]);
         cudaFree(d_Cs[i]);
     }
+
     cublasDestroy(handle);
+    for (int i = 0; i < ABC.size(); i++)
+    {
+        cudaStreamSynchronize(streams[i]);
+        cudaStreamDestroy(streams[i]);
+    }
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> duration = end - start;
     std::cout << "total time elapsed(GPU): " << double(duration.count()) << " ms" << std::endl;

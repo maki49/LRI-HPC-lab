@@ -4,121 +4,61 @@
 #include <cusparse_v2.h>
 #include <iostream>
 #include <assert.h>
+#include "utils.h"
 
-#define cusparseErrcheck(err) {cusparseAssert(err, __FILE__, __LINE__);}
-
-static const char* _cusparseGetErrorEnum(cusparseStatus_t error) {
-    switch (error) {
-    case CUSPARSE_STATUS_SUCCESS:
-        return "CUSPARSE_STATUS_SUCCESS";
-
-    case CUSPARSE_STATUS_NOT_INITIALIZED:
-        return "CUSPARSE_STATUS_NOT_INITIALIZED";
-
-    case CUSPARSE_STATUS_ALLOC_FAILED:
-        return "CUSPARSE_STATUS_ALLOC_FAILED";
-
-    case CUSPARSE_STATUS_INVALID_VALUE:
-        return "CUSPARSE_STATUS_INVALID_VALUE";
-
-    case CUSPARSE_STATUS_ARCH_MISMATCH:
-        return "CUSPARSE_STATUS_ARCH_MISMATCH";
-
-    case CUSPARSE_STATUS_MAPPING_ERROR:
-        return "CUSPARSE_STATUS_MAPPING_ERROR";
-
-    case CUSPARSE_STATUS_EXECUTION_FAILED:
-        return "CUSPARSE_STATUS_EXECUTION_FAILED";
-
-    case CUSPARSE_STATUS_INTERNAL_ERROR:
-        return "CUSPARSE_STATUS_INTERNAL_ERROR";
-
-    case CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED:
-        return "CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED";
-    }
-
-    return "<unknown>";
+template<typename T>
+__device__ T get_element(const T* A, int r, int c, int lda)
+{
+    return A[c * lda + r];
+}
+template<typename T>
+__device__ void set_element(T* A, int r, int c, int lda, const T val)
+{
+    A[c * lda + r] = val;
 }
 
-inline void cusparseAssert(cusparseStatus_t code, const char* file, int line, bool abort = true)
+template<typename T>
+T get_element_h(const T* A, int r, int c, int lda)
 {
-    if (code != CUSPARSE_STATUS_SUCCESS)
+    return A[c * lda + r];
+}
+
+template<typename T>
+void set_element_h(T* A, int r, int c, int lda, const T val)
+{
+    A[c * lda + r] = val;
+}
+
+template<typename T>
+void set_zeros(T* A, const int size)
+{
+    cudaMemset(A, 0, size * sizeof(T));
+}
+
+__global__ void print_device_array(const int* A, const int size)
+{
+    for (int i = 0; i < size; i++)
     {
-        fprintf(stderr, "CUSPARSE Assert: %s %s %d\n", _cusparseGetErrorEnum(code), file, line);
-        if (abort) exit(code);
+        printf("%d ", A[i]);
     }
+    printf("\n");
 }
-
-inline void alloc_h2d(const int* h, int*& d, const int size)
+__global__ void print_device_array(const unsigned long* A, const int size)
 {
-    cudaMalloc((void**)&d, size * sizeof(int));
-    cudaMemcpy(d, h, size * sizeof(int), cudaMemcpyHostToDevice);
+    for (int i = 0; i < size; i++)
+    {
+        printf("%lu ", A[i]);
+    }
+    printf("\n");
 }
-inline void alloc_h2d(const double* h, double*& d, const int size)
+__global__ void print_device_array(const double* A, const int size)
 {
-    cudaMalloc((void**)&d, size * sizeof(double));
-    cudaMemcpy(d, h, size * sizeof(double), cudaMemcpyHostToDevice);
+    for (int i = 0; i < size; i++)
+    {
+        printf("%f ", A[i]);
+    }
+    printf("\n");
 }
-
-inline void alloc_d2h(const int* d, int*& h, const int size)
-{
-    h = new int[size];
-    cudaMemcpy(h, d, size * sizeof(int), cudaMemcpyDeviceToHost);
-}
-inline void alloc_d2h(const double* d, double*& h, const int size)
-{
-    h = new double[size];
-    cudaMemcpy(h, d, size * sizeof(double), cudaMemcpyDeviceToHost);
-}
-
-inline void d2h(const int* d, int* h, const int size)
-{
-    cudaMemcpy(h, d, size * sizeof(int), cudaMemcpyDeviceToHost);
-}
-inline void d2h(const double* d, double* h, const int size)
-{
-    cudaMemcpy(h, d, size * sizeof(double), cudaMemcpyDeviceToHost);
-}
-
-inline void h2d(const int* h, int* d, const int size)
-{
-    cudaMemcpy(d, h, size * sizeof(int), cudaMemcpyHostToDevice);
-}
-inline void h2d(const double* h, double* d, const int size)
-{
-    cudaMemcpy(d, h, size * sizeof(double), cudaMemcpyHostToDevice);
-}
-
-inline void dfree(int* d)
-{
-    cudaFree(d);
-}
-inline void dfree(double* d)
-{
-    cudaFree(d);
-}
-
-__device__ double get_element(const double* A, int r, int c, int lda)
-{
-    return A[c * lda + r];
-}
-
-__device__ void set_element(double* A, int r, int c, int lda, const double val)
-{
-    A[c * lda + r] = val;
-}
-
-__host__ double get_element_h(const double* A, int r, int c, int lda)
-{
-    return A[c * lda + r];
-}
-
-__host__ void set_element_h(double* A, int r, int c, int lda, const double val)
-{
-    A[c * lda + r] = val;
-}
-
-
 
 __global__ void gemm2d_kernel(double* A, double* B, double* C, int M, int N, int K, double alpha, double beta)
 {
@@ -135,12 +75,6 @@ __global__ void gemm2d_kernel(double* A, double* B, double* C, int M, int N, int
         }
         set_element(C, row, col, M, alpha * sum + beta * get_element(C, row, col, M));
     }
-}
-
-template<typename T>
-void set_zeros(T* A, const int size)
-{
-    cudaMemset(A, 0, size * sizeof(T));
 }
 
 template<>
@@ -250,13 +184,115 @@ void CudaGemm<T>::csr2dense(const T* V, const int* CI, const int* RI, const int 
         }
     }
 }
+
+template<>
+int CudaGemm<double>::cusparsegemm_dmem(const int M, const int N, const int K, const double alpha, const double beta, const int nnzA, int* dRowPtrA, int* dColIndA, double* dValA,
+    const int nnzB, int* dRowPtrB, int* dColIndB, double* dValB, int* dRowPtrC, int* dColIndC, double* dValC)
+{
+    cusparseOperation_t opA = CUSPARSE_OPERATION_NON_TRANSPOSE;
+    cusparseOperation_t opB = CUSPARSE_OPERATION_NON_TRANSPOSE;
+    cusparseIndexType_t i32 = CUSPARSE_INDEX_32I;
+    cusparseIndexBase_t b0 = CUSPARSE_INDEX_BASE_ZERO;
+    cudaDataType_t r64f = CUDA_R_64F;
+    cusparseSpGEMMAlg_t alg = CUSPARSE_SPGEMM_DEFAULT;
+
+    // // test： print A, B
+    // std::cout << "A: " << std::endl;
+    // std::cout << "nnzA: " << nnzA << std::endl;
+    std::cout << "dRowPtrA: " << std::endl;
+    print_device_array << <1, 1 >> > (dRowPtrA, M + 1);
+    // std::cout << "dColIndA: " << std::endl;
+    // print_device_array << <1, 1 >> > (dColIndA, nnzA);
+    // std::cout << "dValA: " << std::endl;
+    // print_device_array << <1, 1 >> > (dValA, nnzA);
+    // std::cout << "B: " << std::endl;
+    // std::cout << "nnzB: " << nnzB << std::endl;
+    // std::cout << "dRowPtrB: " << std::endl;
+    // print_device_array << <1, 1 >> > (dRowPtrB, K + 1);
+    // std::cout << "dColIndB: " << std::endl;
+    // print_device_array << <1, 1 >> > (dColIndB, nnzB);
+    // std::cout << "dValB: " << std::endl;
+    // print_device_array << <1, 1 >> > (dValB, nnzB);
+
+    cusparseHandle_t handle;
+    cusparseErrcheck(cusparseCreate(&handle));
+    cusparseSpMatDescr_t matA, matB, matC;
+    cusparseErrcheck(cusparseCreateCsr(&matA, M, K, nnzA, dRowPtrA, dColIndA, dValA,
+        i32, i32, b0, r64f));
+    cusparseErrcheck(cusparseCreateCsr(&matB, K, N, nnzB, dRowPtrB, dColIndB, dValB,
+        i32, i32, b0, r64f));
+    cusparseErrcheck(cusparseCreateCsr(&matC, M, N, 0, dRowPtrC, NULL, NULL,
+        i32, i32, b0, r64f));
+
+    // cannot pass a NULL-dRowPtrC to cusparseCreateCsr
+    // cusparseCreateCsr(&matC, M, N, 0, NULL, NULL, NULL,
+    //     i32, i32, b0, r64f);
+
+    cusparseSpGEMMDescr_t spgemmDesc;
+    cusparseErrcheck(cusparseSpGEMM_createDescr(&spgemmDesc));
+    // ask buffersize bytes for external memory
+    void* dbuffer1 = NULL, * dbuffer2 = NULL;
+    size_t buffersize1 = 0, buffersize2 = 0;
+    cusparseErrcheck(cusparseSpGEMM_workEstimation(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize1, NULL));
+    cudaErrcheck(cudaMalloc(&dbuffer1, buffersize1));
+
+    // inspect the matrices A and B to understand the memory requiremnets for the next step
+    ///if use unsigned long as index,  `CUSPARSE Assert: <unknown> here` will occur
+    cusparseErrcheck(cusparseSpGEMM_workEstimation(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize1, dbuffer1));
+    // ask buffersize2 bytes for external memory
+    cusparseErrcheck(cusparseSpGEMM_compute(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize2, NULL));
+    cudaErrcheck(cudaMalloc(&dbuffer2, buffersize2));
+    //compute A*B
+    cusparseErrcheck(cusparseSpGEMM_compute(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize2, dbuffer2));
+    // get C's non-zero elements: nnzC1
+
+    cudaErrcheck(cudaFree(dbuffer1));
+    cudaErrcheck(cudaFree(dbuffer2));
+
+    // copy C back to host
+    int64_t nrowC, ncolC, nnzC;
+    cusparseErrcheck(cusparseSpMatGetSize(matC, &nrowC, &ncolC, &nnzC));
+
+    // allocate device memory for C using nnzC
+    // seems I can't allocate device memory in subfunction and access it in main function
+    // which will cause segmentation fault
+    // if (if_Malloc_C_Col_Val)
+    // {
+    //     cudaErrcheck(cudaMalloc((void**)&dColIndC, nnzC * sizeof(int)));
+    //     cudaErrcheck(cudaMalloc((void**)&dValC, nnzC * sizeof(double)));
+    // }
+
+    // NOTE: if 'beta' != 0, the values of C must be update after the allocation
+    //       of dC_values, and before the call of cusparseSpGEMM_copy
+
+    // update C with the new pointer
+    cusparseErrcheck(cusparseCsrSetPointers(matC, dRowPtrC, dColIndC, dValC));
+
+    // if beta != 0, cusparseSpGEMM_copy reuses/updates the values of dC_values
+
+    // copy the final products to C
+    cusparseErrcheck(cusparseSpGEMM_copy(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc));
+
+    // destroy matrix/vector descriptors
+    cusparseErrcheck(cusparseSpGEMM_destroyDescr(spgemmDesc));
+    cusparseErrcheck(cusparseDestroySpMat(matA));
+    cusparseErrcheck(cusparseDestroySpMat(matB));
+    cusparseErrcheck(cusparseDestroySpMat(matC));
+    cusparseErrcheck(cusparseDestroy(handle));
+
+    // std::cout << "C: " << std::endl;
+    // std::cout << "nnzC: " << nnzC << std::endl;
+    // print_device_array << <1, 1 >> > (dValC, nnzC);
+
+    return nnzC;
+}
 template<>
 void CudaGemm<double>::gemmsparse_csr(double* A, double* B, double* C, int M, int N, int K, double alpha, double beta)
 {
 
     // reference: https://docs.nvidia.com/cuda/cusparse/#cusparsespgemm
     // =============host==============
-    
+
     std::vector<int> hRowPtrA(M + 1);
     std::vector<int> hColIndA;
     std::vector<double> hValA;
@@ -283,7 +319,7 @@ void CudaGemm<double>::gemmsparse_csr(double* A, double* B, double* C, int M, in
     int* dColIndC;
     double* dValC;
 
-    
+
     alloc_h2d(hRowPtrA.data(), dRowPtrA, M + 1);
     alloc_h2d(hColIndA.data(), dColIndA, nnzA);
     alloc_h2d(hValA.data(), dValA, nnzA);
@@ -294,69 +330,17 @@ void CudaGemm<double>::gemmsparse_csr(double* A, double* B, double* C, int M, in
     // alloc_h2d(hColIndC.data(), dColIndC, 0);
     // alloc_h2d(hValC.data(), dValC, 0);
 
-    cusparseOperation_t opA = CUSPARSE_OPERATION_NON_TRANSPOSE;
-    cusparseOperation_t opB = CUSPARSE_OPERATION_NON_TRANSPOSE;
-    cusparseIndexType_t i32 = CUSPARSE_INDEX_32I;
-    cusparseIndexBase_t b0 = CUSPARSE_INDEX_BASE_ZERO;
-    cudaDataType_t r64f = CUDA_R_64F;
-    cusparseSpGEMMAlg_t alg = CUSPARSE_SPGEMM_DEFAULT;
+    int maxnnzC = M * N;
+    // allocate device memory for C using maxnnzC
+    cudaErrcheck(cudaMalloc((void**)&dColIndC, maxnnzC * sizeof(int)));
+    cudaErrcheck(cudaMalloc((void**)&dValC, maxnnzC * sizeof(double)));
 
+    int nnzC = cusparsegemm_dmem(M, N, K, alpha, beta, nnzA, dRowPtrA, dColIndA, dValA, nnzB, dRowPtrB, dColIndB, dValB, dRowPtrC, dColIndC, dValC);
 
-    cusparseHandle_t handle;
-    cusparseCreate(&handle);
-    cusparseSpMatDescr_t matA, matB, matC;
-    cusparseCreateCsr(&matA, M, K, nnzA, dRowPtrA, dColIndA, dValA,
-        i32, i32, b0, r64f);
-    cusparseCreateCsr(&matB, K, N, nnzB, dRowPtrB, dColIndB, dValB,
-        i32, i32, b0, r64f);
-    cusparseCreateCsr(&matC, M, N, 0, dRowPtrC, NULL, NULL,
-        i32, i32, b0, r64f);
+    // print device memory
+    // must use kernel function (executed on device) to print device memory
+    print_device_array << <1, 1 >> > (dValC, nnzC);
 
-    // cannot pass a NULL-dRowPtrC to cusparseCreateCsr
-    // cusparseCreateCsr(&matC, M, N, 0, NULL, NULL, NULL,
-    //     i32, i32, b0, r64f);
-
-    cusparseSpGEMMDescr_t spgemmDesc;
-    cusparseErrcheck(cusparseSpGEMM_createDescr(&spgemmDesc));
-    // ask buffersize bytes for external memory
-    void* dbuffer1 = NULL, * dbuffer2 = NULL;
-    size_t buffersize1 = 0, buffersize2 = 0;
-    cusparseErrcheck(cusparseSpGEMM_workEstimation(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize1, NULL));
-    cudaMalloc(&dbuffer1, buffersize1);
-    // inspect the matrices A and B to understand the memory requiremnets for the next step
-    cusparseErrcheck(cusparseSpGEMM_workEstimation(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize1, dbuffer1));
-    // ask buffersize2 bytes for external memory
-    cusparseErrcheck(cusparseSpGEMM_compute(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize2, NULL));
-    cudaMalloc(&dbuffer2, buffersize2);
-    //compute A*B
-    cusparseErrcheck(cusparseSpGEMM_compute(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc, &buffersize2, dbuffer2));
-    // get C's non-zero elements: nnzC1
-    
-    // copy C back to host
-    int64_t nrowC, ncolC, nnzC;
-    cusparseErrcheck(cusparseSpMatGetSize(matC, &nrowC, &ncolC, &nnzC));
-
-    // allocate device memory for C
-    cudaMalloc((void**)&dColIndC, nnzC * sizeof(int));
-    cudaMalloc((void**)&dValC, nnzC * sizeof(double));
-
-    // NOTE: if 'beta' != 0, the values of C must be update after the allocation
-    //       of dC_values, and before the call of cusparseSpGEMM_copy
-
-    // update C with the new pointer
-    cusparseErrcheck(cusparseCsrSetPointers(matC, dRowPtrC, dColIndC, dValC));
-
-    // if beta != 0, cusparseSpGEMM_copy reuses/updates the values of dC_values
-
-    // copy the final products to C
-    cusparseErrcheck(cusparseSpGEMM_copy(handle, opA, opB, &alpha, matA, matB, &beta, matC, r64f, alg, spgemmDesc));
-
-    // destroy matrix/vector descriptors
-    cusparseErrcheck(cusparseSpGEMM_destroyDescr(spgemmDesc));
-    cusparseErrcheck(cusparseDestroySpMat(matA));
-    cusparseErrcheck(cusparseDestroySpMat(matB));
-    cusparseErrcheck(cusparseDestroySpMat(matC));
-    cusparseErrcheck(cusparseDestroy(handle));
     
     // copy C (CSR) from device to host
     hColIndC.resize(nnzC);
